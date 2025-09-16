@@ -1,1 +1,69 @@
-<!doctype html><html><body><h1>ClearPoint DataApp</h1></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ClearPoint DataApp</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>ClearPoint DataApp</h1>
+    <p>Upload a CSV, choose which columns to normalize (emails/phones) and which columns to use for duplicate removal.</p>
+
+    <form id="form" enctype="multipart/form-data">
+      <label>CSV file</label>
+      <input type="file" name="file" accept=".csv" required />
+
+      <label>Email columns (comma separated)</label>
+      <input type="text" name="email_columns" placeholder="email,alt_email" />
+
+      <label>Phone columns (comma separated)</label>
+      <input type="text" name="phone_columns" placeholder="phone,cell" />
+
+      <label>Key columns for dedupe (comma separated)</label>
+      <input type="text" name="key_columns" placeholder="email,phone" />
+
+      <button type="submit">Process</button>
+    </form>
+
+    <div id="summary" class="summary hidden"></div>
+    <a id="download" class="hidden" download="cleaned.csv">Download cleaned CSV</a>
+  </div>
+
+  <script>
+    const form = document.getElementById('form');
+    const summaryBox = document.getElementById('summary');
+    const downloadLink = document.getElementById('download');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      summaryBox.classList.add('hidden');
+      downloadLink.classList.add('hidden');
+
+      const fd = new FormData(form);
+      const res = await fetch('/api/process', { method: 'POST', body: fd });
+      if (!res.ok) {
+        alert('Processing failed.');
+        return;
+      }
+      const data = await res.json();
+      const s = data.summary;
+
+      summaryBox.innerHTML = `<b>Summary</b><br>
+        Rows in: ${s.rows_in}<br>
+        Rows out: ${s.rows_out}<br>
+        Duplicates removed: ${s.duplicates_removed}<br>
+        Invalid emails: ${s.invalid_emails}<br>
+        Invalid phones: ${s.invalid_phones}`;
+      summaryBox.classList.remove('hidden');
+
+      // Build a downloadable CSV from the returned CSV text
+      const blob = new Blob([data.csv_text], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      downloadLink.href = url;
+      downloadLink.classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>
