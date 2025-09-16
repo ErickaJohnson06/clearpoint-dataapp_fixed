@@ -8,3 +8,4 @@ aiosqlite==0.20.0
 gspread==6.1.4
 google-auth==2.35.0
 requests==2.32.3
+itsdangerous==2.2.0
