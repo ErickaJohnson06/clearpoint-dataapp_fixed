@@ -14,15 +14,11 @@ class Settings:
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "")
 
-    # Allowed company domains (for employee role)
     ALLOWED_GOOGLE_DOMAINS = [d.strip().lower() for d in os.getenv("ALLOWED_GOOGLE_DOMAINS", "").split(",") if d.strip()]
 
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./clearpoint.db")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM = os.getenv("RESEND_FROM", "noreply@clearpoint.example")
-
-    GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "")
 
 settings = Settings()

@@ -1,8 +1,6 @@
-
 services:
   - type: web
-    name: clearpoint-dataapp
+    name: clearpoint-enterprise
     env: docker
     plan: starter
-    autoDeploy: true
     healthCheckPath: /healthz

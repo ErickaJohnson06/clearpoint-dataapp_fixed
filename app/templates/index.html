@@ -1,7 +1,9 @@
 
 <!doctype html>
-<html><head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ brand.APP_NAME }} — Enterprise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -19,7 +21,6 @@
     <div class="flex items-center gap-2">
       <a href="/redact" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Redact docs</a>
       {% if user %}
-        <a href="/dashboard" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Dashboard</a>
         <form method="post" action="/logout"><button class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Logout</button></form>
       {% else %}
         <a href="/login" class="px-3 py-1 rounded-lg text-sm" style="background: var(--brand)">Sign in with Google</a>
@@ -54,12 +55,13 @@
     </div>
     <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4"><h2 class="text-lg font-semibold mb-4">Analytics (this device)</h2><canvas id="analyticsChart" height="260"></canvas></div>
   </section>
-
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const ctx = document.getElementById('analyticsChart'); const chart = new Chart(ctx,{type:'bar',data:{labels:[],datasets:[{label:'Invalid emails',data:[]},{label:'Invalid phones',data:[]},{label:'Duplicates removed',data:[]}]}});
+const ctx=document.getElementById('analyticsChart'); const chart=new Chart(ctx,{type:'bar',data:{labels:[],datasets:[{label:'Invalid emails',data:[]},{label:'Invalid phones',data:[]},{label:'Duplicates removed',data:[]}]}});
 const form=document.getElementById('form'); const headersHint=document.getElementById('headersHint'); const summaryBox=document.getElementById('summary'); const preview=document.getElementById('preview'); const tHead=document.querySelector('#previewTable thead'); const tBody=document.querySelector('#previewTable tbody'); const dlCsv=document.getElementById('downloadCsv'); const dlXlsx=document.getElementById('downloadXlsx'); const openReportBtn=document.getElementById('openReport'); const printReportBtn=document.getElementById('printReport');
-form.file.addEventListener('change', async()=>{ if(!form.file.files[0])return; const text=await form.file.files[0].text(); const firstLine=text.split(/\r?\n/)[0]||''; headersHint.textContent=firstLine ? 'Detected headers: '+firstLine : ''});
+form.file.addEventListener('change', async()=>{ if(!form.file.files[0]) return; const text=await form.file.files[0].text(); const firstLine=text.split(/\r?\n/)[0]||''; headersHint.textContent=firstLine ? 'Detected headers: '+firstLine : '' });
 form.addEventListener('submit', async(e)=>{ e.preventDefault(); summaryBox.classList.add('hidden'); preview.classList.add('hidden'); const fd=new FormData(form); const res=await fetch('/api/process',{method:'POST',body:fd}); if(!res.ok){alert('Processing failed');return;} const data=await res.json(); const s=data.summary;
 summaryBox.innerHTML=`<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
 <div><span class='text-slate-400'>Rows in</span><div class='text-xl font-semibold'>${s.rows_in}</div></div>
@@ -69,7 +71,9 @@ summaryBox.innerHTML=`<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'
 <div><span class='text-slate-400'>Invalid phones</span><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
 <div><span class='text-slate-400'>Columns</span><div class='text-sm break-all'>${(s.columns||[]).join(', ')}</div></div></div>`; summaryBox.classList.remove('hidden');
 const blob=new Blob([data.csv_text],{type:'text/csv'}); const url=URL.createObjectURL(blob); dlCsv.href=url; dlCsv.classList.remove('hidden'); dlXlsx.onclick=()=>{const wb=XLSX.utils.book_new(); const ws=XLSX.utils.csv_to_sheet(data.csv_text); XLSX.utils.book_append_sheet(wb,ws,'Cleaned'); XLSX.writeFile(wb,'cleaned.xlsx');}; dlXlsx.classList.remove('hidden');
-const rows=data.preview_rows||[]; tHead.innerHTML=''; tBody.innerHTML=''; if(rows.length){ const cols=Object.keys(rows[0]); const tr=document.createElement('tr'); cols.forEach(c=>{const th=document.createElement('th'); th.className='text-left p-2 border-b border-slate-800'; th.textContent=c; tr.appendChild(th)}); tHead.appendChild(tr); rows.forEach(r=>{const trb=document.createElement('tr'); cols.forEach(c=>{const td=document.createElement('td'); td.className='p-2'; td.textContent=r[c]??''; trb.appendChild(td)}); tBody.appendChild(trb)}); preview.classList.remove('hidden'); }
+const rows=data.preview_rows||[]; tHead.innerHTML=''; tBody.innerHTML=''; if(rows.length){ const cols=Object.keys(rows[0]); const tr=document.createElement('tr'); cols.forEach(c=>{const th=document.createElement('th'); th.className='text-left p-2 border-b border-slate-800'; th.textContent=c; tr.appendChild(th)}); tHead.appendChild(tr); rows.forEach(r=>{const trb=document.createElement('tr'); cols.forEach(c=>{const td=document.createElement('td'); td.className='p-2'; td.textContent=r[c]??''; trb.appendChild(td)}); tBody.appendChild(trb); } ); preview.classList.remove('hidden'); }
+chart.data.labels.push(new Date().toLocaleTimeString()); chart.data.datasets[0].data.push(s.invalid_emails); chart.data.datasets[1].data.push(s.invalid_phones); chart.data.datasets[2].data.push(s.duplicates_removed); chart.update();
 });
 </script>
-</body></html>
+</body>
+</html>
