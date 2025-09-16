@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, Form, UploadFile, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import io, csv, re
@@ -39,8 +39,9 @@ def split_csv_cols(s: str):
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post("/api/upload")
-async def upload_csv(
+# JSON API that returns a summary and the cleaned CSV text
+@app.post("/api/process")
+async def process_csv(
     file: UploadFile = File(...),
     email_columns: str = Form(default=""),
     phone_columns: str = Form(default=""),
@@ -53,21 +54,23 @@ async def upload_csv(
 
     email_cols = split_csv_cols(email_columns)
     phone_cols = split_csv_cols(phone_columns)
-    key_cols = split_csv_cols(key_columns)
+    key_cols   = split_csv_cols(key_columns)
 
     invalid_email_count = 0
     invalid_phone_count = 0
 
+    # Normalize
     for r in rows:
         for col in email_cols:
             if col in r:
-                r[col], invalid = normalize_email(r[col])
-                invalid_email_count += 1 if invalid else 0
+                r[col], bad = normalize_email(r[col])
+                invalid_email_count += 1 if bad else 0
         for col in phone_cols:
             if col in r:
-                r[col], invalid = normalize_us_phone(r[col])
-                invalid_phone_count += 1 if invalid else 0
+                r[col], bad = normalize_us_phone(r[col])
+                invalid_phone_count += 1 if bad else 0
 
+    # Dedupe
     seen = set()
     deduped = []
     dup_count = 0
@@ -80,8 +83,9 @@ async def upload_csv(
             seen.add(key)
         deduped.append(r)
 
+    # Build cleaned CSV text
     if deduped:
-        fieldnames = deduped[0].keys()
+        fieldnames = list(deduped[0].keys())
     else:
         fieldnames = reader.fieldnames or []
 
@@ -89,7 +93,7 @@ async def upload_csv(
     writer = csv.DictWriter(out_io, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     writer.writerows(deduped)
-    out_bytes = io.BytesIO(out_io.getvalue().encode("utf-8"))
+    cleaned_csv_text = out_io.getvalue()
 
     summary = {
         "rows_in": len(rows),
@@ -99,7 +103,8 @@ async def upload_csv(
         "invalid_phones": invalid_phone_count,
     }
 
-    return JSONResponse({"summary": summary, "download_filename": "cleaned.csv"}), StreamingResponse(out_bytes, media_type="text/csv")
+    # Return JSON that includes the CSV as text; the frontend will create a download
+    return {"summary": summary, "csv_text": cleaned_csv_text}
 
 @app.get("/healthz")
 async def health():
