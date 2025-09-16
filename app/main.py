@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import io, csv, re
 
-app = FastAPI(title="ClearPoint DataApp")
+app = FastAPI(title="ClearPoint DataApp — Pro")
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -91,7 +91,6 @@ async def process_csv(
     writer.writerows(deduped)
     cleaned_csv_text = out_io.getvalue()
 
-    # return a few sample rows for preview
     preview_rows = deduped[:10]
 
     summary = {
