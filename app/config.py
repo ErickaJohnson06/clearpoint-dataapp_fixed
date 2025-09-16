@@ -3,15 +3,20 @@ import os
 class Settings:
     APP_NAME = os.getenv("BRAND_NAME", "ClearPoint Data Services")
     TAGLINE = os.getenv("BRAND_TAGLINE", "Accuracy You Can Trust")
-    LOGO_URL = os.getenv("BRAND_LOGO_URL", "")  # Optional
-    PRIMARY_HEX = os.getenv("BRAND_PRIMARY_HEX", "#06b6d4")  # cyan-500 default
+    LOGO_URL = os.getenv("BRAND_LOGO_URL", "")
+    PRIMARY_HEX = os.getenv("BRAND_PRIMARY_HEX", "#06b6d4")
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-me")  # for session cookies
+    SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
+
+    BASE_URL = os.getenv("BASE_URL", "")  # e.g. https://clearpoint-dataapp.onrender.com
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "")  # e.g. https://yourapp.onrender.com/auth/callback
+    OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "")
+
+    # Only allow sign-in from these Google Workspace domains (comma-separated)
+    ALLOWED_GOOGLE_DOMAINS = [d.strip().lower() for d in os.getenv("ALLOWED_GOOGLE_DOMAINS", "").split(",") if d.strip()]
 
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./clearpoint.db")
@@ -20,8 +25,8 @@ class Settings:
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM = os.getenv("RESEND_FROM", "noreply@clearpoint.example")
 
-    # Google Sheets (Service Account JSON) + target spreadsheet
-    GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")  # JSON string
+    # Google Sheets
+    GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
     GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "")
 
 settings = Settings()

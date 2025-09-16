@@ -1,21 +1,20 @@
-from fastapi import FastAPI, File, Form, UploadFile, Request, Depends
+from fastapi import FastAPI, File, Form, UploadFile, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import JSONResponse
 from sqlmodel import select
 
 import io, csv, re, json
 from app.config import settings
 from app.db import init_db, get_session
 from app.models import User, Run
-from app.auth import oauth, require_login
+from app.auth import oauth, require_login, require_employee
 from app.emailer import send_report_email
 from app.sheets import export_to_sheets
 
-app = FastAPI(title="ClearPoint DataApp — Enterprise")
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+app = FastAPI(title="ClearPoint DataApp — Enterprise Orgs")
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, same_site="lax", https_only=True)
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -42,8 +41,7 @@ def normalize_us_phone(value: str):
     return (value or '').strip(), True
 
 def split_csv_cols(s: str):
-    if not s:
-        return []
+    if not s: return []
     return [c.strip() for c in s.split(',') if c.strip()]
 
 @app.on_event("startup")
@@ -52,36 +50,43 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    user = request.session.get("user")
-    return templates.TemplateResponse("index.html", {"request": request, "user": user, "brand": settings})
+    return templates.TemplateResponse("index.html", {"request": request, "user": request.session.get("user"), "brand": settings})
 
-# ---------- Auth routes
+# ---------- Google OAuth
 @app.get("/login")
 async def login(request: Request):
     if not oauth._clients.get("google"):
         return RedirectResponse(url="/?auth=disabled")
-    redirect_uri = settings.OAUTH_REDIRECT_URI
+    redirect_uri = settings.OAUTH_REDIRECT_URI or (settings.BASE_URL.rstrip('/') + "/auth/callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @app.get("/auth/callback")
 async def auth_callback(request: Request):
+    if not oauth._clients.get("google"):
+        return RedirectResponse(url="/?auth=disabled")
     token = await oauth.google.authorize_access_token(request)
-    userinfo = token.get("userinfo")
-    if not userinfo:
-        return RedirectResponse(url="/?auth=failed")
-    # store in DB if not exists
-    from app.db import get_session
+    userinfo = token.get("userinfo") or {}
+    email = (userinfo.get("email") or "").lower()
+
+    # Enforce domain allowlist if set
+    if settings.ALLOWED_GOOGLE_DOMAINS:
+        ok = any(email.endswith("@" + d) for d in settings.ALLOWED_GOOGLE_DOMAINS)
+        if not ok:
+            return RedirectResponse(url="/?auth=forbidden")
+
+    # Determine role (employee if matches domain allowlist, else client)
+    role = "employee" if (settings.ALLOWED_GOOGLE_DOMAINS and any(email.endswith("@" + d) for d in settings.ALLOWED_GOOGLE_DOMAINS)) else "client"
+
     with get_session() as s:
-        existing = s.exec(select(User).where(User.email == userinfo["email"])).first()
+        existing = s.exec(select(User).where(User.email == email)).first()
         if not existing:
-            u = User(email=userinfo["email"], name=userinfo.get("name"), picture=userinfo.get("picture"))
-            s.add(u)
-            s.commit()
-            s.refresh(u)
-            user_id = u.id
+            u = User(email=email, name=userinfo.get("name"), picture=userinfo.get("picture"), role=role)
+            s.add(u); s.commit(); s.refresh(u)
+            user_id = u.id; user_role = u.role
         else:
-            user_id = existing.id
-    request.session["user"] = {"id": user_id, "email": userinfo["email"], "name": userinfo.get("name"), "picture": userinfo.get("picture")}
+            user_id = existing.id; user_role = existing.role
+
+    request.session["user"] = {"id": user_id, "email": email, "name": userinfo.get("name"), "picture": userinfo.get("picture"), "role": user_role}
     return RedirectResponse(url="/")
 
 @app.post("/logout")
@@ -89,7 +94,7 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/")
 
-# ---------- API
+# ---------- Processing
 @app.post("/api/process")
 async def process_csv(
     request: Request,
@@ -151,47 +156,62 @@ async def process_csv(
         "columns": fieldnames,
     }
 
-    # Persist run if logged in
-    user = request.session.get("user")
-    if user:
-        from app.db import get_session
-        from app.models import Run
+    # Persist run for current user if logged in
+    u = request.session.get("user")
+    if u:
         with get_session() as s:
             run = Run(
-                user_id=user["id"],
+                owner_user_id=u["id"],
                 rows_in=summary["rows_in"],
                 rows_out=summary["rows_out"],
                 duplicates_removed=summary["duplicates_removed"],
                 invalid_emails=summary["invalid_emails"],
                 invalid_phones=summary["invalid_phones"],
                 columns_csv=",".join(fieldnames),
-                sample_json=json.dumps(preview_rows)[:20000]
             )
-            s.add(run)
-            s.commit()
+            s.add(run); s.commit()
 
     return {"summary": summary, "csv_text": cleaned_csv_text, "preview_rows": preview_rows}
 
+# ---------- Sheets & Email
 @app.post("/api/email_report")
 async def email_report(request: Request, to_email: str = Form(...), html: str = Form(...)):
-    data = send_report_email(to_email=to_email, subject="Your ClearPoint Report", html=html)
-    return data
+    return send_report_email(to_email=to_email, subject="Your ClearPoint Report", html=html)
 
 @app.post("/api/export_to_sheets")
 async def export_sheet(csv_text: str = Form(...)):
-    res = export_to_sheets(csv_text)
-    return res
+    return export_to_sheets(csv_text)
 
+# ---------- Dashboard (per user / employees see all)
 @app.get("/dashboard", response_class=HTMLResponse)
 @require_login
 async def dashboard(request: Request):
-    from app.db import get_session
-    from app.models import Run
-    from sqlmodel import select
+    u = request.session.get("user")
     with get_session() as s:
-        user = request.session.get("user")
-        runs = s.exec(select(Run).where(Run.user_id == user["id"]).order_by(Run.created_at.desc()).limit(100)).all()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "runs": runs, "brand": settings, "user": request.session.get("user")})
+        if u.get("role") == "employee":
+            runs = s.exec(select(Run).order_by(Run.created_at.desc()).limit(200)).all()
+        else:
+            runs = s.exec(select(Run).where(Run.owner_user_id == u["id"]).order_by(Run.created_at.desc()).limit(200)).all()
+    return templates.TemplateResponse("dashboard.html", {"request": request, "runs": runs, "brand": settings, "user": u})
+
+# ---------- Admin (employees only): view users & set roles
+@app.get("/admin/users", response_class=HTMLResponse)
+@require_employee
+async def admin_users(request: Request):
+    with get_session() as s:
+        users = s.exec(select(User).order_by(User.created_at.desc())).all()
+    return templates.TemplateResponse("admin_users.html", {"request": request, "users": users, "brand": settings, "user": request.session.get("user")})
+
+@app.post("/admin/set_role")
+@require_employee
+async def admin_set_role(request: Request, user_id: int = Form(...), role: str = Form(...)):
+    role = role if role in ("employee", "client") else "client"
+    with get_session() as s:
+        u = s.get(User, user_id)
+        if u:
+            u.role = role
+            s.add(u); s.commit()
+    return RedirectResponse(url="/admin/users", status_code=303)
 
 @app.get("/healthz")
 async def health():

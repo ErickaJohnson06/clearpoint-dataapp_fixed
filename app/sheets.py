@@ -15,13 +15,9 @@ def export_to_sheets(csv_text: str):
     creds = Credentials.from_service_account_info(info, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(settings.GOOGLE_SHEETS_SPREADSHEET_ID)
-    # Create new worksheet named by timestamp
     title = datetime.utcnow().strftime("Cleaned %Y-%m-%d %H:%M")
     ws = sh.add_worksheet(title=title, rows="1", cols="1")
-    # Paste CSV into sheet
     rows = [row.split(",") for row in csv_text.strip().split("\n")]
-    # Resize
     ws.resize(rows=len(rows), cols=max(len(r) for r in rows))
-    # Update in batches
-    ws.update(f"A1", rows)
+    ws.update("A1", rows)
     return {"ok": True, "worksheet": title}

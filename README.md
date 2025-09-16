@@ -1,31 +1,34 @@
-# ClearPoint DataApp — Enterprise
+# ClearPoint DataApp — Enterprise Orgs
 
-Features:
-- Google Sign-In (OAuth2)
-- Per-user run history (SQLite + SQLModel)
-- Branded UI (logo, colors, tagline via ENV)
-- CSV preview, CSV/XLSX download, printable report (Save as PDF)
-- Email report via Resend (optional)
-- Export to Google Sheets (optional)
+**New**
+- Google Sign-In hardened: BASE_URL + OAUTH_REDIRECT_URI + Domain allowlist
+- Roles: **employee** vs **client**; employees see all runs, clients see only their own
+- Admin page to manage user roles
+- Everything from Pro: preview, CSV/XLSX, report (print-to-PDF), email via Resend, Google Sheets export
 
 ## Required ENV
-- `SECRET_KEY` (any random string)
-- Optional branding: `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL`, `BRAND_PRIMARY_HEX`
+- `SECRET_KEY`: long random string
+- `BASE_URL`: your full Render URL, e.g. `https://clearpoint-dataapp.onrender.com`
 
-## Google OAuth (optional)
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `OAUTH_REDIRECT_URI` → `https://<your-app>.onrender.com/auth/callback`
+## Google OAuth (Console + Render ENV)
+- In Google Cloud Console (Credentials → OAuth 2.0 Client IDs):
+  - Authorized JavaScript origin: `https://<your-render-url>`
+  - Authorized redirect URI: `https://<your-render-url>/auth/callback`
+- In Render (Environment):
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `OAUTH_REDIRECT_URI` = `https://<your-render-url>/auth/callback`
+  - Optional: `ALLOWED_GOOGLE_DOMAINS` = `yourcompany.com,anotherdomain.com`
 
-## Email via Resend (optional)
-- `RESEND_API_KEY`
-- `RESEND_FROM` (e.g., noreply@yourdomain.com)
+## Branding (optional)
+- `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_LOGO_URL`, `BRAND_PRIMARY_HEX`
+
+## Email (optional)
+- `RESEND_API_KEY`, `RESEND_FROM`
 
 ## Google Sheets (optional)
-- `GOOGLE_SERVICE_ACCOUNT_JSON` → paste the full JSON string for the service account
-- `GOOGLE_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHEETS_SPREADSHEET_ID`
 
-## Run
-```bash
-uvicorn app.main:app --reload
-```
+## Roles
+- If `ALLOWED_GOOGLE_DOMAINS` is set, users from those domains are tagged `employee`; others are `client`.
+- Employees can access `/admin/users` to change roles.

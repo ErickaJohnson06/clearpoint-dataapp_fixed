@@ -13,9 +13,19 @@ if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET:
         client_kwargs={"scope": "openid email profile"},
     )
 
-def require_login(func):
+def require_login(handler):
     async def wrapper(request: Request, *args, **kwargs):
         if not request.session.get("user"):
             return RedirectResponse(url="/login")
-        return await func(request, *args, **kwargs)
+        return await handler(request, *args, **kwargs)
+    return wrapper
+
+def require_employee(handler):
+    async def wrapper(request: Request, *args, **kwargs):
+        u = request.session.get("user")
+        if not u:
+            return RedirectResponse(url="/login")
+        if u.get("role") != "employee":
+            return RedirectResponse(url="/?forbidden=1")
+        return await handler(request, *args, **kwargs)
     return wrapper
