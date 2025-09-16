@@ -1,10 +1,21 @@
-from fastapi import FastAPI, File, Form, UploadFile, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, Form, UploadFile, Request, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import io, csv, re
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import JSONResponse
+from sqlmodel import select
 
-app = FastAPI(title="ClearPoint DataApp — Pro")
+import io, csv, re, json
+from app.config import settings
+from app.db import init_db, get_session
+from app.models import User, Run
+from app.auth import oauth, require_login
+from app.emailer import send_report_email
+from app.sheets import export_to_sheets
+
+app = FastAPI(title="ClearPoint DataApp — Enterprise")
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -35,19 +46,60 @@ def split_csv_cols(s: str):
         return []
     return [c.strip() for c in s.split(',') if c.strip()]
 
-@app.get('/', response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse('index.html', {'request': request})
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
-@app.post('/api/process')
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    user = request.session.get("user")
+    return templates.TemplateResponse("index.html", {"request": request, "user": user, "brand": settings})
+
+# ---------- Auth routes
+@app.get("/login")
+async def login(request: Request):
+    if not oauth._clients.get("google"):
+        return RedirectResponse(url="/?auth=disabled")
+    redirect_uri = settings.OAUTH_REDIRECT_URI
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request):
+    token = await oauth.google.authorize_access_token(request)
+    userinfo = token.get("userinfo")
+    if not userinfo:
+        return RedirectResponse(url="/?auth=failed")
+    # store in DB if not exists
+    from app.db import get_session
+    with get_session() as s:
+        existing = s.exec(select(User).where(User.email == userinfo["email"])).first()
+        if not existing:
+            u = User(email=userinfo["email"], name=userinfo.get("name"), picture=userinfo.get("picture"))
+            s.add(u)
+            s.commit()
+            s.refresh(u)
+            user_id = u.id
+        else:
+            user_id = existing.id
+    request.session["user"] = {"id": user_id, "email": userinfo["email"], "name": userinfo.get("name"), "picture": userinfo.get("picture")}
+    return RedirectResponse(url="/")
+
+@app.post("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/")
+
+# ---------- API
+@app.post("/api/process")
 async def process_csv(
+    request: Request,
     file: UploadFile = File(...),
-    email_columns: str = Form(default=''),
-    phone_columns: str = Form(default=''),
-    key_columns: str   = Form(default='')
+    email_columns: str = Form(default=""),
+    phone_columns: str = Form(default=""),
+    key_columns: str   = Form(default="")
 ):
     contents = await file.read()
-    text = contents.decode('utf-8', errors='replace')
+    text = contents.decode("utf-8", errors="replace")
     reader = csv.DictReader(io.StringIO(text))
     rows = list(reader)
 
@@ -80,13 +132,10 @@ async def process_csv(
             seen.add(key)
         deduped.append(r)
 
-    if deduped:
-        fieldnames = list(deduped[0].keys())
-    else:
-        fieldnames = reader.fieldnames or []
+    fieldnames = list(deduped[0].keys()) if deduped else (reader.fieldnames or [])
 
     out_io = io.StringIO()
-    writer = csv.DictWriter(out_io, fieldnames=fieldnames, extrasaction='ignore')
+    writer = csv.DictWriter(out_io, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     writer.writerows(deduped)
     cleaned_csv_text = out_io.getvalue()
@@ -94,15 +143,56 @@ async def process_csv(
     preview_rows = deduped[:10]
 
     summary = {
-        'rows_in': len(rows),
-        'rows_out': len(deduped),
-        'duplicates_removed': dup_count,
-        'invalid_emails': invalid_email_count,
-        'invalid_phones': invalid_phone_count,
-        'columns': fieldnames,
+        "rows_in": len(rows),
+        "rows_out": len(deduped),
+        "duplicates_removed": dup_count,
+        "invalid_emails": invalid_email_count,
+        "invalid_phones": invalid_phone_count,
+        "columns": fieldnames,
     }
-    return {'summary': summary, 'csv_text': cleaned_csv_text, 'preview_rows': preview_rows}
 
-@app.get('/healthz')
+    # Persist run if logged in
+    user = request.session.get("user")
+    if user:
+        from app.db import get_session
+        from app.models import Run
+        with get_session() as s:
+            run = Run(
+                user_id=user["id"],
+                rows_in=summary["rows_in"],
+                rows_out=summary["rows_out"],
+                duplicates_removed=summary["duplicates_removed"],
+                invalid_emails=summary["invalid_emails"],
+                invalid_phones=summary["invalid_phones"],
+                columns_csv=",".join(fieldnames),
+                sample_json=json.dumps(preview_rows)[:20000]
+            )
+            s.add(run)
+            s.commit()
+
+    return {"summary": summary, "csv_text": cleaned_csv_text, "preview_rows": preview_rows}
+
+@app.post("/api/email_report")
+async def email_report(request: Request, to_email: str = Form(...), html: str = Form(...)):
+    data = send_report_email(to_email=to_email, subject="Your ClearPoint Report", html=html)
+    return data
+
+@app.post("/api/export_to_sheets")
+async def export_sheet(csv_text: str = Form(...)):
+    res = export_to_sheets(csv_text)
+    return res
+
+@app.get("/dashboard", response_class=HTMLResponse)
+@require_login
+async def dashboard(request: Request):
+    from app.db import get_session
+    from app.models import Run
+    from sqlmodel import select
+    with get_session() as s:
+        user = request.session.get("user")
+        runs = s.exec(select(Run).where(Run.user_id == user["id"]).order_by(Run.created_at.desc()).limit(100)).all()
+    return templates.TemplateResponse("dashboard.html", {"request": request, "runs": runs, "brand": settings, "user": request.session.get("user")})
+
+@app.get("/healthz")
 async def health():
-    return {'ok': True}
+    return {"ok": True}

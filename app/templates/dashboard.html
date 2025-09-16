@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ brand.APP_NAME }} — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Dashboard</h1>
+      <a href="/" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Back</a>
+    </header>
+
+    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 overflow-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-900">
+          <tr>
+            <th class="text-left p-2">When</th>
+            <th class="text-left p-2">Rows In</th>
+            <th class="text-left p-2">Rows Out</th>
+            <th class="text-left p-2">Dup Removed</th>
+            <th class="text-left p-2">Bad Emails</th>
+            <th class="text-left p-2">Bad Phones</th>
+            <th class="text-left p-2">Columns</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-900">
+          {% for r in runs %}
+          <tr>
+            <td class="p-2">{{ r.created_at }}</td>
+            <td class="p-2">{{ r.rows_in }}</td>
+            <td class="p-2">{{ r.rows_out }}</td>
+            <td class="p-2">{{ r.duplicates_removed }}</td>
+            <td class="p-2">{{ r.invalid_emails }}</td>
+            <td class="p-2">{{ r.invalid_phones }}</td>
+            <td class="p-2 whitespace-pre-wrap">{{ r.columns_csv }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

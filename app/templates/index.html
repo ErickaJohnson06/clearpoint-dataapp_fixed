@@ -3,24 +3,36 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>ClearPoint DataApp — Pro</title>
+  <title>{{ brand.APP_NAME }} — Enterprise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --brand: {{ brand.PRIMARY_HEX }}; }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
   <div class="max-w-6xl mx-auto p-6">
     <header class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-cyan-500 flex items-center justify-center font-black text-slate-900">CP</div>
+        {% if brand.LOGO_URL %}
+          <img src="{{ brand.LOGO_URL }}" class="h-10 w-10 rounded-xl object-cover" alt="logo"/>
+        {% else %}
+          <div class="h-10 w-10 rounded-xl" style="background: var(--brand)"></div>
+        {% endif %}
         <div>
-          <h1 class="text-2xl font-bold">ClearPoint Data Services</h1>
-          <p class="text-slate-400 text-sm -mt-0.5">Accuracy You Can Trust</p>
+          <h1 class="text-2xl font-bold">{{ brand.APP_NAME }}</h1>
+          <p class="text-slate-400 text-sm -mt-0.5">{{ brand.TAGLINE }}</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button id="toggleTheme" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Toggle theme</button>
-        <a href="/docs" class="px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-sm">API Docs</a>
+        {% if user %}
+          <a href="/dashboard" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Dashboard</a>
+          <form method="post" action="/logout"><button class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Logout</button></form>
+        {% else %}
+          <a href="/login" class="px-3 py-1 rounded-lg text-sm" style="background: var(--brand)">Sign in with Google</a>
+        {% endif %}
+        <a href="/docs" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">API Docs</a>
       </div>
     </header>
 
@@ -30,7 +42,8 @@
         <form id="form" class="grid md:grid-cols-2 gap-4" enctype="multipart/form-data">
           <div class="md:col-span-2">
             <label class="block text-sm font-semibold mb-1">CSV file</label>
-            <input class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-600 file:text-white file:cursor-pointer rounded-lg bg-slate-950 border border-slate-800 p-2" type="file" name="file" accept=".csv" required />
+            <input class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 text-white file:cursor-pointer rounded-lg bg-slate-950 border border-slate-800 p-2"
+                   style="--tw-file-bg: var(--brand); background: inherit" type="file" name="file" accept=".csv" required />
             <p id="headersHint" class="text-xs text-slate-400 mt-1"></p>
           </div>
           <div>
@@ -45,12 +58,14 @@
             <label class="block text-sm font-semibold mb-1">Key columns for dedupe</label>
             <input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="key_columns" placeholder="email,phone"/>
           </div>
-          <div class="md:col-span-2 flex gap-3">
-            <button class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500" type="submit" id="processBtn">Process</button>
+          <div class="md:col-span-2 flex flex-wrap gap-3">
+            <button class="px-4 py-2 rounded-xl text-slate-900" type="submit" id="processBtn" style="background: var(--brand)">Process</button>
             <a id="downloadCsv" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" download="cleaned.csv">Download CSV</a>
             <button id="downloadXlsx" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Download Excel</button>
             <button id="openReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Open Report</button>
             <button id="printReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Save as PDF</button>
+            <button id="emailReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Email Report</button>
+            <button id="sheetsExport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Export to Google Sheets</button>
           </div>
         </form>
 
@@ -68,19 +83,23 @@
       </div>
 
       <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-        <h2 class="text-lg font-semibold mb-4">Analytics</h2>
+        <h2 class="text-lg font-semibold mb-4">Analytics (this device)</h2>
         <canvas id="analyticsChart" height="260"></canvas>
-        <p class="text-xs text-slate-400 mt-2">Aggregated from this browser's session.</p>
       </div>
     </section>
 
+    <!-- Report -->
     <section id="report" class="hidden print:block max-w-4xl mx-auto mt-8 bg-white text-slate-900 rounded-2xl p-8">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-xl bg-cyan-600 flex items-center justify-center font-black text-white">CP</div>
+          {% if brand.LOGO_URL %}
+            <img src="{{ brand.LOGO_URL }}" class="h-10 w-10 rounded-xl object-cover" alt="logo"/>
+          {% else %}
+            <div class="h-10 w-10 rounded-xl" style="background: {{ brand.PRIMARY_HEX }}"></div>
+          {% endif %}
           <div>
-            <div class="text-xl font-bold">ClearPoint Data Services</div>
-            <div class="text-slate-600 text-sm">Accuracy You Can Trust</div>
+            <div class="text-xl font-bold">{{ brand.APP_NAME }}</div>
+            <div class="text-slate-600 text-sm">{{ brand.TAGLINE }}</div>
           </div>
         </div>
         <div class="text-right text-sm text-slate-500">
@@ -104,15 +123,10 @@
   </div>
 
   <script>
-    const html = document.documentElement;
-    const toggleThemeBtn = document.getElementById('toggleTheme');
-    const savedTheme = localStorage.getItem('cp-theme') || 'dark';
-    if (savedTheme === 'light') html.classList.remove('dark'); else html.classList.add('dark');
-    toggleThemeBtn.onclick = () => {
-      if (html.classList.contains('dark')) { html.classList.remove('dark'); localStorage.setItem('cp-theme','light'); }
-      else { html.classList.add('dark'); localStorage.setItem('cp-theme','dark'); }
-    };
+    // Branding color
+    const brand = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();
 
+    // Elements
     const form = document.getElementById('form');
     const headersHint = document.getElementById('headersHint');
     const summaryBox = document.getElementById('summary');
@@ -123,6 +137,8 @@
     const dlXlsx = document.getElementById('downloadXlsx');
     const openReportBtn = document.getElementById('openReport');
     const printReportBtn = document.getElementById('printReport');
+    const emailReportBtn = document.getElementById('emailReport');
+    const sheetsExportBtn = document.getElementById('sheetsExport');
     const report = document.getElementById('report');
     const reportDate = document.getElementById('reportDate');
     const reportSummary = document.getElementById('reportSummary');
@@ -130,6 +146,7 @@
     const reportHead = document.querySelector('#reportTable thead');
     const reportBody = document.querySelector('#reportTable tbody');
 
+    // Chart
     const ctx = document.getElementById('analyticsChart');
     const analyticsData = JSON.parse(localStorage.getItem('cp-analytics') || '{"labels":[],"invalidEmails":[],"invalidPhones":[],"duplicatesRemoved":[]}');
     const chart = new Chart(ctx, {
@@ -137,7 +154,7 @@
       data: {
         labels: analyticsData.labels,
         datasets: [
-          { label: 'Invalid emails', data: analyticsData.invalidEmails },
+          { label: 'Invalid emails', data: analyticsData.invalidEmails, backgroundColor: brand || '#06b6d4' },
           { label: 'Invalid phones', data: analyticsData.invalidPhones },
           { label: 'Duplicates removed', data: analyticsData.duplicatesRemoved },
         ]
@@ -153,6 +170,7 @@
       chart.update();
     }
 
+    // Auto-detect header hint
     form.file.addEventListener('change', async () => {
       if (!form.file.files[0]) return;
       const text = await form.file.files[0].text();
@@ -163,7 +181,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       summaryBox.classList.add('hidden'); preview.classList.add('hidden');
-      dlCsv.classList.add('hidden'); dlXlsx.classList.add('hidden'); openReportBtn.classList.add('hidden'); printReportBtn.classList.add('hidden');
+      [dlCsv, dlXlsx, openReportBtn, printReportBtn, emailReportBtn, sheetsExportBtn].forEach(el => el.classList.add('hidden'));
 
       const fd = new FormData(form);
       const res = await fetch('/api/process', { method: 'POST', body: fd });
@@ -171,6 +189,7 @@
       const data = await res.json();
       const s = data.summary;
 
+      // Summary
       summaryBox.innerHTML = `<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
         <div><span class='text-slate-400'>Rows in</span><div class='text-xl font-semibold'>${s.rows_in}</div></div>
         <div><span class='text-slate-400'>Rows out</span><div class='text-xl font-semibold'>${s.rows_out}</div></div>
@@ -181,6 +200,7 @@
       </div>`;
       summaryBox.classList.remove('hidden');
 
+      // Downloads
       const csvBlob = new Blob([data.csv_text], { type: 'text/csv' });
       const csvUrl = URL.createObjectURL(csvBlob);
       dlCsv.href = csvUrl; dlCsv.classList.remove('hidden');
@@ -192,6 +212,7 @@
       };
       dlXlsx.classList.remove('hidden');
 
+      // Preview
       const rows = data.preview_rows || [];
       tHead.innerHTML = ''; tBody.innerHTML = '';
       if (rows.length) {
@@ -217,62 +238,133 @@
         preview.classList.remove('hidden');
       }
 
+      // Update chart & store last run for report/email/sheets
       updateChart(new Date().toLocaleTimeString(), s.invalid_emails, s.invalid_phones, s.duplicates_removed);
       localStorage.setItem('cp-last-run', JSON.stringify(data));
-      openReportBtn.classList.remove('hidden');
-      printReportBtn.classList.remove('hidden');
+      [openReportBtn, printReportBtn, emailReportBtn, sheetsExportBtn].forEach(el => el.classList.remove('hidden'));
     });
 
-    function buildReport() {
+    function buildReportHTML() {
       const data = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
-      if (!data) { alert('No recent run to report.'); return; }
+      if (!data) return "<p>No recent run.</p>";
       const s = data.summary;
-      document.getElementById('reportDate').textContent = new Date().toLocaleString();
-      document.getElementById('reportSummary').innerHTML = `
-        <div><div class='text-slate-500'>Rows in</div><div class='text-xl font-semibold'>${s.rows_in}</div></div>
-        <div><div class='text-slate-500'>Rows out</div><div class='text-xl font-semibold'>${s.rows_out}</div></div>
-        <div><div class='text-slate-500'>Duplicates removed</div><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
-        <div><div class='text-slate-500'>Invalid emails</div><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
-        <div><div class='text-slate-500'>Invalid phones</div><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
-      `;
-      document.getElementById('reportColumns').textContent = (s.columns || []).join(', ');
+      const cols = (s.columns || []).join(', ');
 
-      const head = document.querySelector('#reportTable thead');
-      const body = document.querySelector('#reportTable tbody');
-      head.innerHTML = ''; body.innerHTML = '';
       const rows = data.preview_rows || [];
+      let tableHead = ""; let tableBody = "";
       if (rows.length) {
-        const cols = Object.keys(rows[0]);
-        const tr = document.createElement('tr');
-        cols.forEach(c => {
-          const th = document.createElement('th');
-          th.className = 'text-left p-2 border-b';
-          th.textContent = c;
-          tr.appendChild(th);
-        });
-        head.appendChild(tr);
-        rows.forEach(r => {
-          const trb = document.createElement('tr');
-          cols.forEach(c => {
-            const td = document.createElement('td');
-            td.className = 'p-2';
-            td.textContent = r[c] ?? '';
-            trb.appendChild(td);
-          });
-          body.appendChild(trb);
-        });
+        const headers = Object.keys(rows[0]);
+        tableHead = "<tr>" + headers.map(h => `<th style='text-align:left;border-bottom:1px solid #e5e7eb;padding:8px'>${h}</th>`).join("") + "</tr>";
+        tableBody = rows.map(r => {
+          return "<tr>" + headers.map(h => `<td style='padding:8px'>${(r[h] ?? "")}</td>`).join("") + "</tr>";
+        }).join("");
       }
+
+      return `
+        <div style="font-family: ui-sans-serif, system-ui; color:#111827">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:40px;height:40px;border-radius:12px;background:${brand}"></div>
+              <div>
+                <div style="font-weight:700">` + document.title + `</div>
+                <div style="color:#6b7280;font-size:12px">Automated Report</div>
+              </div>
+            </div>
+            <div style="text-align:right;color:#6b7280;font-size:12px">
+              <div>` + new Date().toLocaleString() + `</div>
+            </div>
+          </div>
+          <h2 style="font-weight:700;font-size:18px;margin:8px 0">Data Cleaning Summary</h2>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:14px">
+            <div><div style="color:#6b7280">Rows in</div><div style="font-weight:700;font-size:18px">${s.rows_in}</div></div>
+            <div><div style="color:#6b7280">Rows out</div><div style="font-weight:700;font-size:18px">${s.rows_out}</div></div>
+            <div><div style="color:#6b7280">Duplicates removed</div><div style="font-weight:700;font-size:18px">${s.duplicates_removed}</div></div>
+            <div><div style="color:#6b7280">Invalid emails</div><div style="font-weight:700;font-size:18px">${s.invalid_emails}</div></div>
+            <div><div style="color:#6b7280">Invalid phones</div><div style="font-weight:700;font-size:18px">${s.invalid_phones}</div></div>
+            <div><div style="color:#6b7280">Columns</div><div>${cols}</div></div>
+          </div>
+          <h3 style="font-weight:600;margin:12px 0 6px">Sample Rows</h3>
+          <table style="width:100%;border:1px solid #e5e7eb;border-radius:12px;border-collapse:separate;border-spacing:0">
+            <thead style="background:#f3f4f6">${tableHead}</thead>
+            <tbody>${tableBody}</tbody>
+          </table>
+        </div>
+      `;
     }
 
     document.getElementById('openReport').onclick = () => {
-      document.getElementById('report').classList.remove('hidden');
-      buildReport();
+      const report = document.getElementById('report');
+      report.classList.remove('hidden');
+      document.getElementById('reportDate').textContent = new Date().toLocaleString();
+      const html = buildReportHTML();
+      // also render into printable section
+      const head = document.querySelector('#reportTable thead');
+      const body = document.querySelector('#reportTable tbody');
+      const data = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
+      if (data) {
+        const s = data.summary;
+        document.getElementById('reportSummary').innerHTML = `
+          <div><div class='text-slate-500'>Rows in</div><div class='text-xl font-semibold'>${s.rows_in}</div></div>
+          <div><div class='text-slate-500'>Rows out</div><div class='text-xl font-semibold'>${s.rows_out}</div></div>
+          <div><div class='text-slate-500'>Duplicates removed</div><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
+          <div><div class='text-slate-500'>Invalid emails</div><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
+          <div><div class='text-slate-500'>Invalid phones</div><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
+        `;
+        document.getElementById('reportColumns').textContent = (s.columns || []).join(', ');
+
+        head.innerHTML = ''; body.innerHTML = '';
+        const rows = data.preview_rows || [];
+        if (rows.length) {
+          const headers = Object.keys(rows[0]);
+          const tr = document.createElement('tr');
+          headers.forEach(h => {
+            const th = document.createElement('th');
+            th.className = 'text-left p-2 border-b';
+            th.textContent = h; tr.appendChild(th);
+          });
+          head.appendChild(tr);
+          rows.forEach(r => {
+            const trb = document.createElement('tr');
+            headers.forEach(h => {
+              const td = document.createElement('td');
+              td.className = 'p-2'; td.textContent = r[h] ?? '';
+              trb.appendChild(td);
+            });
+            body.appendChild(trb);
+          });
+        }
+      }
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
+
     document.getElementById('printReport').onclick = () => {
       const report = document.getElementById('report');
-      if (report.classList.contains('hidden')) { report.classList.remove('hidden'); buildReport(); }
+      if (report.classList.contains('hidden')) document.getElementById('openReport').click();
       window.print();
+    };
+
+    document.getElementById('emailReport').onclick = async () => {
+      const html = buildReportHTML();
+      const to = prompt("Send report to which email address?");
+      if (!to) return;
+      const fd = new FormData();
+      fd.append('to_email', to);
+      fd.append('html', html);
+      const res = await fetch('/api/email_report', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.error) alert('Email error: ' + data.error);
+      else alert('Email sent (or queued).');
+    };
+
+    document.getElementById('sheetsExport').onclick = async () => {
+      const last = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
+      if (!last) return alert("No data to export.");
+      const fd = new FormData();
+      fd.append('csv_text', last.csv_text);
+      const res = await fetch('/api/export_to_sheets', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) alert('Sheets export error: ' + (data.error || 'unknown'));
+      else alert('Exported to Google Sheets worksheet: ' + data.worksheet);
     };
   </script>
 </body>
