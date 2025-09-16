@@ -1,68 +1,148 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>ClearPoint DataApp</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-<body>
-  <div class="container">
-    <h1>ClearPoint DataApp</h1>
-    <p>Upload a CSV, choose which columns to normalize (emails/phones) and which columns to use for duplicate removal.</p>
+<body class="bg-slate-900 text-slate-100">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold">ClearPoint DataApp</h1>
+      <p class="text-slate-300 mt-2">Upload a CSV, normalize emails & US phones, remove duplicates, and download the cleaned file.</p>
+    </header>
 
-    <form id="form" enctype="multipart/form-data">
-      <label>CSV file</label>
-      <input type="file" name="file" accept=".csv" required />
+    <section class="bg-slate-800 rounded-2xl p-4 shadow-xl">
+      <form id="form" class="grid md:grid-cols-2 gap-4" enctype="multipart/form-data">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">CSV file</label>
+          <input class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:cursor-pointer rounded-lg bg-slate-900 border border-slate-700 p-2" type="file" name="file" accept=".csv" required />
+          <p id="headersHint" class="text-xs text-slate-400 mt-1"></p>
+        </div>
 
-      <label>Email columns (comma separated)</label>
-      <input type="text" name="email_columns" placeholder="email,alt_email" />
+        <div>
+          <label class="block text-sm font-semibold mb-1">Email columns</label>
+          <input class="w-full rounded-lg bg-slate-900 border border-slate-700 p-2" type="text" name="email_columns" placeholder="email,alt_email"/>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Phone columns</label>
+          <input class="w-full rounded-lg bg-slate-900 border border-slate-700 p-2" type="text" name="phone_columns" placeholder="phone,cell"/>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">Key columns for dedupe</label>
+          <input class="w-full rounded-lg bg-slate-900 border border-slate-700 p-2" type="text" name="key_columns" placeholder="email,phone"/>
+        </div>
 
-      <label>Phone columns (comma separated)</label>
-      <input type="text" name="phone_columns" placeholder="phone,cell" />
+        <div class="md:col-span-2 flex gap-3">
+          <button class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500" type="submit" id="processBtn">Process</button>
+          <a id="downloadCsv" class="hidden px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600" download="cleaned.csv">Download CSV</a>
+          <button id="downloadXlsx" class="hidden px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600" type="button">Download Excel</button>
+        </div>
+      </form>
 
-      <label>Key columns for dedupe (comma separated)</label>
-      <input type="text" name="key_columns" placeholder="email,phone" />
+      <div id="summary" class="hidden mt-6 bg-slate-900/50 border border-slate-700 rounded-xl p-4"></div>
 
-      <button type="submit">Process</button>
-    </form>
-
-    <div id="summary" class="summary hidden"></div>
-    <a id="download" class="hidden" download="cleaned.csv">Download cleaned CSV</a>
+      <div id="preview" class="hidden mt-6">
+        <h3 class="font-semibold mb-2">Preview (first 10 rows)</h3>
+        <div class="overflow-auto border border-slate-700 rounded-xl">
+          <table id="previewTable" class="min-w-full text-sm">
+            <thead class="bg-slate-800"></thead>
+            <tbody class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>
     const form = document.getElementById('form');
+    const headersHint = document.getElementById('headersHint');
     const summaryBox = document.getElementById('summary');
-    const downloadLink = document.getElementById('download');
+    const preview = document.getElementById('preview');
+    const tHead = document.querySelector('#previewTable thead');
+    const tBody = document.querySelector('#previewTable tbody');
+    const dlCsv = document.getElementById('downloadCsv');
+    const dlXlsx = document.getElementById('downloadXlsx');
+
+    // Auto-detect column headers when a file is chosen
+    form.file.addEventListener('change', async () => {
+      if (!form.file.files[0]) return;
+      const text = await form.file.files[0].text();
+      const firstLine = text.split(/\r?\n/)[0] || '';
+      headersHint.textContent = firstLine ? 'Detected headers: ' + firstLine : '';
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      summaryBox.classList.add('hidden');
-      downloadLink.classList.add('hidden');
+      summaryBox.classList.add('hidden'); preview.classList.add('hidden');
+      dlCsv.classList.add('hidden'); dlXlsx.classList.add('hidden');
 
       const fd = new FormData(form);
       const res = await fetch('/api/process', { method: 'POST', body: fd });
-      if (!res.ok) {
-        alert('Processing failed.');
-        return;
-      }
+      if (!res.ok) { alert('Processing failed'); return; }
       const data = await res.json();
       const s = data.summary;
 
-      summaryBox.innerHTML = `<b>Summary</b><br>
-        Rows in: ${s.rows_in}<br>
-        Rows out: ${s.rows_out}<br>
-        Duplicates removed: ${s.duplicates_removed}<br>
-        Invalid emails: ${s.invalid_emails}<br>
-        Invalid phones: ${s.invalid_phones}`;
+      // Summary
+      summaryBox.innerHTML = `<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
+        <div><span class='text-slate-400'>Rows in</span><div class='text-xl font-semibold'>${s.rows_in}</div></div>
+        <div><span class='text-slate-400'>Rows out</span><div class='text-xl font-semibold'>${s.rows_out}</div></div>
+        <div><span class='text-slate-400'>Duplicates removed</span><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
+        <div><span class='text-slate-400'>Invalid emails</span><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
+        <div><span class='text-slate-400'>Invalid phones</span><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
+        <div><span class='text-slate-400'>Columns</span><div class='text-sm break-all'>${(s.columns||[]).join(', ')}</div></div>
+      </div>`;
       summaryBox.classList.remove('hidden');
 
-      // Build a downloadable CSV from the returned CSV text
-      const blob = new Blob([data.csv_text], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      downloadLink.href = url;
-      downloadLink.classList.remove('hidden');
+      // CSV download
+      const csvBlob = new Blob([data.csv_text], { type: 'text/csv' });
+      const csvUrl = URL.createObjectURL(csvBlob);
+      dlCsv.href = csvUrl;
+      dlCsv.classList.remove('hidden');
+
+      // XLSX download (client-side with SheetJS)
+      dlXlsx.onclick = () => {
+        // Convert CSV text to worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.sheet_to_sheet ? XLSX.utils.sheet_to_sheet(data.csv_text) : XLSX.utils.csv_to_sheet(data.csv_text);
+      };
+      // Use csv_to_sheet
+      dlXlsx.onclick = () => {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.csv_to_sheet(data.csv_text);
+        XLSX.utils.book_append_sheet(wb, ws, 'Cleaned');
+        XLSX.writeFile(wb, 'cleaned.xlsx');
+      };
+      dlXlsx.classList.remove('hidden');
+
+      // Preview table
+      const rows = data.preview_rows || [];
+      tHead.innerHTML = ''; tBody.innerHTML = '';
+      if (rows.length) {
+        const cols = Object.keys(rows[0]);
+        const tr = document.createElement('tr');
+        cols.forEach(c => {
+          const th = document.createElement('th');
+          th.className = 'text-left p-2 border-b border-slate-700';
+          th.textContent = c;
+          tr.appendChild(th);
+        });
+        tHead.appendChild(tr);
+
+        rows.forEach(r => {
+          const trb = document.createElement('tr');
+          cols.forEach(c => {
+            const td = document.createElement('td');
+            td.className = 'p-2';
+            td.textContent = r[c] ?? '';
+            trb.appendChild(td);
+          });
+          tBody.appendChild(trb);
+        });
+        preview.classList.remove('hidden');
+      }
     });
   </script>
 </body>
