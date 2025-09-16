@@ -1,3 +1,4 @@
+
 fastapi==0.115.0
 uvicorn==0.30.6
 jinja2==3.1.4
@@ -10,3 +11,6 @@ google-auth==2.35.0
 requests==2.32.3
 itsdangerous==2.2.0
 httpx==0.27.2
+pdf-redactor==0.1.10
+pillow==10.4.0
+python-docx==1.1.2

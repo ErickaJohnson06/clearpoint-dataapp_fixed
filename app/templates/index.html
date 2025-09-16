@@ -1,300 +1,75 @@
+
 <!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>{{ brand.APP_NAME }} — Enterprise Orgs</title>
+<html><head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ brand.APP_NAME }} — Enterprise</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <style>:root { --brand: {{ brand.PRIMARY_HEX }}; }</style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>:root{--brand: {{ brand.PRIMARY_HEX }};}</style>
 </head>
 <body class="bg-slate-950 text-slate-100">
-  <div class="max-w-6xl mx-auto p-6">
-    <header class="flex items-center justify-between mb-6">
-      <div class="flex items-center gap-3">
-        {% if brand.LOGO_URL %}
-          <img src="{{ brand.LOGO_URL }}" class="h-10 w-10 rounded-xl object-cover" alt="logo"/>
-        {% else %}
-          <div class="h-10 w-10 rounded-xl" style="background: var(--brand)"></div>
-        {% endif %}
-        <div>
-          <h1 class="text-2xl font-bold">{{ brand.APP_NAME }}</h1>
-          <p class="text-slate-400 text-sm -mt-0.5">{{ brand.TAGLINE }}</p>
+<div class="max-w-6xl mx-auto p-6">
+  <header class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+      {% if brand.LOGO_URL %}<img src="{{ brand.LOGO_URL }}" class="h-10 w-10 rounded-xl object-cover"/>{% else %}
+      <div class="h-10 w-10 rounded-xl" style="background: var(--brand)"></div>{% endif %}
+      <div><h1 class="text-2xl font-bold">{{ brand.APP_NAME }}</h1><p class="text-slate-400 text-sm -mt-0.5">{{ brand.TAGLINE }}</p></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="/redact" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Redact docs</a>
+      {% if user %}
+        <a href="/dashboard" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Dashboard</a>
+        <form method="post" action="/logout"><button class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Logout</button></form>
+      {% else %}
+        <a href="/login" class="px-3 py-1 rounded-lg text-sm" style="background: var(--brand)">Sign in with Google</a>
+      {% endif %}
+      <a href="/docs" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">API Docs</a>
+    </div>
+  </header>
+
+  <section class="grid md:grid-cols-3 gap-6">
+    <div class="md:col-span-2 bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+      <h2 class="text-lg font-semibold mb-4">Process a CSV</h2>
+      <form id="form" class="grid md:grid-cols-2 gap-4" enctype="multipart/form-data">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold mb-1">CSV file</label>
+          <input class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 text-white file:cursor-pointer rounded-lg bg-slate-950 border border-slate-800 p-2" type="file" name="file" accept=".csv" required />
+          <p id="headersHint" class="text-xs text-slate-400 mt-1"></p>
         </div>
-      </div>
-      <div class="flex items-center gap-2">
-        {% if user %}
-          <a href="/dashboard" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Dashboard</a>
-          {% if user.role == 'employee' %}
-            <a href="/admin/users" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Admin</a>
-          {% endif %}
-          <form method="post" action="/logout"><button class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Logout</button></form>
-        {% else %}
-          <a href="/login" class="px-3 py-1 rounded-lg text-sm" style="background: var(--brand)">Sign in with Google</a>
-        {% endif %}
-      </div>
-    </header>
-
-    <section class="grid md:grid-cols-3 gap-6">
-      <div class="md:col-span-2 bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-        <h2 class="text-lg font-semibold mb-4">Process a CSV</h2>
-        <form id="form" class="grid md:grid-cols-2 gap-4" enctype="multipart/form-data">
-          <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-1">CSV file</label>
-            <input class="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 text-white file:cursor-pointer rounded-lg bg-slate-950 border border-slate-800 p-2" type="file" name="file" accept=".csv" required />
-            <p id="headersHint" class="text-xs text-slate-400 mt-1"></p>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">Email columns</label>
-            <input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="email_columns" placeholder="email,alt_email"/>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">Phone columns</label>
-            <input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="phone_columns" placeholder="phone,cell"/>
-          </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-1">Key columns for dedupe</label>
-            <input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="key_columns" placeholder="email,phone"/>
-          </div>
-          <div class="md:col-span-2 flex flex-wrap gap-3">
-            <button class="px-4 py-2 rounded-xl text-slate-900" type="submit" id="processBtn" style="background: var(--brand)">Process</button>
-            <a id="downloadCsv" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" download="cleaned.csv">Download CSV</a>
-            <button id="downloadXlsx" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Download Excel</button>
-            <button id="openReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Open Report</button>
-            <button id="printReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Save as PDF</button>
-            <button id="emailReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Email Report</button>
-            <button id="sheetsExport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Export to Google Sheets</button>
-          </div>
-        </form>
-
-        <div id="summary" class="hidden mt-6 bg-slate-950 border border-slate-800 rounded-xl p-4"></div>
-
-        <div id="preview" class="hidden mt-6">
-          <h3 class="font-semibold mb-2">Preview (first 10 rows)</h3>
-          <div class="overflow-auto border border-slate-800 rounded-xl">
-            <table id="previewTable" class="min-w-full text-sm">
-              <thead class="bg-slate-900"></thead>
-              <tbody class="divide-y divide-slate-900"></tbody>
-            </table>
-          </div>
+        <div><label class="block text-sm font-semibold mb-1">Email columns</label><input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="email_columns" placeholder="email,alt_email"/></div>
+        <div><label class="block text-sm font-semibold mb-1">Phone columns</label><input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="phone_columns" placeholder="phone,cell"/></div>
+        <div class="md:col-span-2"><label class="block text-sm font-semibold mb-1">Key columns for dedupe</label><input class="w-full rounded-lg bg-slate-950 border border-slate-800 p-2" type="text" name="key_columns" placeholder="email,phone"/></div>
+        <div class="md:col-span-2 flex flex-wrap gap-3">
+          <button class="px-4 py-2 rounded-xl text-slate-900" type="submit" id="processBtn" style="background: var(--brand)">Process</button>
+          <a id="downloadCsv" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" download="cleaned.csv">Download CSV</a>
+          <button id="downloadXlsx" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Download Excel</button>
+          <button id="openReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Open Report</button>
+          <button id="printReport" class="hidden px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" type="button">Save as PDF</button>
         </div>
-      </div>
+      </form>
+      <div id="summary" class="hidden mt-6 bg-slate-950 border border-slate-800 rounded-xl p-4"></div>
+      <div id="preview" class="hidden mt-6"><h3 class="font-semibold mb-2">Preview (first 10 rows)</h3><div class="overflow-auto border border-slate-800 rounded-xl">
+        <table id="previewTable" class="min-w-full text-sm"><thead class="bg-slate-900"></thead><tbody class="divide-y divide-slate-900"></tbody></table></div></div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4"><h2 class="text-lg font-semibold mb-4">Analytics (this device)</h2><canvas id="analyticsChart" height="260"></canvas></div>
+  </section>
 
-      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
-        <h2 class="text-lg font-semibold mb-4">Analytics (this device)</h2>
-        <canvas id="analyticsChart" height="260"></canvas>
-      </div>
-    </section>
-
-    <!-- Report (printable) -->
-    <section id="report" class="hidden print:block max-w-4xl mx-auto mt-8 bg-white text-slate-900 rounded-2xl p-8">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          {% if brand.LOGO_URL %}
-            <img src="{{ brand.LOGO_URL }}" class="h-10 w-10 rounded-xl object-cover" alt="logo"/>
-          {% else %}
-            <div class="h-10 w-10 rounded-xl" style="background: {{ brand.PRIMARY_HEX }}"></div>
-          {% endif %}
-          <div>
-            <div class="text-xl font-bold">{{ brand.APP_NAME }}</div>
-            <div class="text-slate-600 text-sm">{{ brand.TAGLINE }}</div>
-          </div>
-        </div>
-        <div class="text-right text-sm text-slate-500">
-          <div id="reportDate"></div>
-          <div>clearpoint-dataapp</div>
-        </div>
-      </div>
-      <h2 class="text-2xl font-bold mb-2">Data Cleaning Summary</h2>
-      <p class="text-slate-600 mb-6">This report summarizes the results of your latest CSV processing.</p>
-      <div id="reportSummary" class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-6"></div>
-      <h3 class="text-lg font-semibold mb-2">Columns</h3>
-      <div id="reportColumns" class="text-sm text-slate-700 mb-6"></div>
-      <h3 class="text-lg font-semibold mb-2">Sample Rows</h3>
-      <div class="overflow-auto border rounded-xl">
-        <table id="reportTable" class="min-w-full text-sm">
-          <thead class="bg-slate-100"></thead>
-          <tbody class="divide-y"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    // Chart setup
-    const ctx = document.getElementById('analyticsChart');
-    const analyticsData = JSON.parse(localStorage.getItem('cp-analytics') || '{"labels":[],"invalidEmails":[],"invalidPhones":[],"duplicatesRemoved":[]}');
-    const chart = new Chart(ctx, { type: 'bar', data: { labels: analyticsData.labels, datasets: [
-      { label: 'Invalid emails', data: analyticsData.invalidEmails },
-      { label: 'Invalid phones', data: analyticsData.invalidPhones },
-      { label: 'Duplicates removed', data: analyticsData.duplicatesRemoved },
-    ] } });
-
-    function updateChart(label, invalidEmails, invalidPhones, duplicatesRemoved) {
-      analyticsData.labels.push(label);
-      analyticsData.invalidEmails.push(invalidEmails);
-      analyticsData.invalidPhones.push(invalidPhones);
-      analyticsData.duplicatesRemoved.push(duplicatesRemoved);
-      localStorage.setItem('cp-analytics', JSON.stringify(analyticsData));
-      chart.update();
-    }
-
-    // UI elements
-    const form = document.getElementById('form');
-    const headersHint = document.getElementById('headersHint');
-    const summaryBox = document.getElementById('summary');
-    const preview = document.getElementById('preview');
-    const tHead = document.querySelector('#previewTable thead');
-    const tBody = document.querySelector('#previewTable tbody');
-    const dlCsv = document.getElementById('downloadCsv');
-    const dlXlsx = document.getElementById('downloadXlsx');
-    const openReportBtn = document.getElementById('openReport');
-    const printReportBtn = document.getElementById('printReport');
-    const emailReportBtn = document.getElementById('emailReport');
-    const sheetsExportBtn = document.getElementById('sheetsExport');
-    const report = document.getElementById('report');
-
-    // Header auto-detect
-    form.file.addEventListener('change', async () => {
-      if (!form.file.files[0]) return;
-      const text = await form.file.files[0].text();
-      const firstLine = text.split(/\r?\n/)[0] || '';
-      headersHint.textContent = firstLine ? 'Detected headers: ' + firstLine : '';
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      [summaryBox, preview].forEach(el => el.classList.add('hidden'));
-      [dlCsv, dlXlsx, openReportBtn, printReportBtn, emailReportBtn, sheetsExportBtn].forEach(el => el.classList.add('hidden'));
-
-      const fd = new FormData(form);
-      const res = await fetch('/api/process', { method: 'POST', body: fd });
-      if (!res.ok) { alert('Processing failed'); return; }
-      const data = await res.json();
-      const s = data.summary;
-
-      summaryBox.innerHTML = `<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
-        <div><span class='text-slate-400'>Rows in</span><div class='text-xl font-semibold'>${s.rows_in}</div></div>
-        <div><span class='text-slate-400'>Rows out</span><div class='text-xl font-semibold'>${s.rows_out}</div></div>
-        <div><span class='text-slate-400'>Duplicates removed</span><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
-        <div><span class='text-slate-400'>Invalid emails</span><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
-        <div><span class='text-slate-400'>Invalid phones</span><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
-        <div><span class='text-slate-400'>Columns</span><div class='text-sm break-all'>${(s.columns||[]).join(', ')}</div></div>
-      </div>`;
-      summaryBox.classList.remove('hidden');
-
-      const blob = new Blob([data.csv_text], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      dlCsv.href = url; dlCsv.classList.remove('hidden');
-      dlXlsx.onclick = () => { const wb = XLSX.utils.book_new(); const ws = XLSX.utils.csv_to_sheet(data.csv_text); XLSX.utils.book_append_sheet(wb, ws, 'Cleaned'); XLSX.writeFile(wb, 'cleaned.xlsx'); };
-      dlXlsx.classList.remove('hidden');
-
-      const rows = data.preview_rows || [];
-      tHead.innerHTML = ''; tBody.innerHTML = '';
-      if (rows.length) {
-        const cols = Object.keys(rows[0]);
-        const tr = document.createElement('tr');
-        cols.forEach(c => { const th = document.createElement('th'); th.className = 'text-left p-2 border-b border-slate-800'; th.textContent = c; tr.appendChild(th); });
-        tHead.appendChild(tr);
-        rows.forEach(r => {
-          const trb = document.createElement('tr');
-          cols.forEach(c => { const td = document.createElement('td'); td.className = 'p-2'; td.textContent = r[c] ?? ''; trb.appendChild(td); });
-          tBody.appendChild(trb);
-        });
-        preview.classList.remove('hidden');
-      }
-
-      updateChart(new Date().toLocaleTimeString(), s.invalid_emails, s.invalid_phones, s.duplicates_removed);
-      localStorage.setItem('cp-last-run', JSON.stringify(data));
-      [openReportBtn, printReportBtn, emailReportBtn, sheetsExportBtn].forEach(el => el.classList.remove('hidden'));
-    });
-
-    function buildReportHTML() {
-      const data = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
-      if (!data) return '<p>No recent run.</p>';
-      const s = data.summary;
-      const cols = (s.columns || []).join(', ');
-      const rows = data.preview_rows || [];
-      let head = '', body = '';
-      if (rows.length) {
-        const headers = Object.keys(rows[0]);
-        head = '<tr>' + headers.map(h => `<th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:8px">${h}</th>`).join('') + '</tr>';
-        body = rows.map(r => '<tr>' + headers.map(h => `<td style="padding:8px">${r[h] ?? ''}</td>`).join('') + '</tr>').join('');
-      }
-      return `
-        <div style="font-family: ui-sans-serif, system-ui; color:#111827">
-          <h2 style="font-weight:700;font-size:18px;margin:8px 0">Data Cleaning Summary</h2>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:14px">
-            <div><div style="color:#6b7280">Rows in</div><div style="font-weight:700;font-size:18px">${s.rows_in}</div></div>
-            <div><div style="color:#6b7280">Rows out</div><div style="font-weight:700;font-size:18px">${s.rows_out}</div></div>
-            <div><div style="color:#6b7280">Duplicates removed</div><div style="font-weight:700;font-size:18px">${s.duplicates_removed}</div></div>
-            <div><div style="color:#6b7280">Invalid emails</div><div style="font-weight:700;font-size:18px">${s.invalid_emails}</div></div>
-            <div><div style="color:#6b7280">Invalid phones</div><div style="font-weight:700;font-size:18px">${s.invalid_phones}</div></div>
-            <div><div style="color:#6b7280">Columns</div><div>${cols}</div></div>
-          </div>
-          <h3 style="font-weight:600;margin:12px 0 6px">Sample Rows</h3>
-          <table style="width:100%;border:1px solid #e5e7eb;border-radius:12px;border-collapse:separate;border-spacing:0">
-            <thead style="background:#f3f4f6">${head}</thead>
-            <tbody>${body}</tbody>
-          </table>
-        </div>`;
-    }
-
-    document.getElementById('openReport').onclick = () => {
-      const data = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
-      if (!data) return alert('No recent run to report.');
-      const s = data.summary;
-      document.getElementById('report').classList.remove('hidden');
-      document.getElementById('reportDate').textContent = new Date().toLocaleString();
-      document.getElementById('reportSummary').innerHTML = `
-        <div><div class='text-slate-500'>Rows in</div><div class='text-xl font-semibold'>${s.rows_in}</div></div>
-        <div><div class='text-slate-500'>Rows out</div><div class='text-xl font-semibold'>${s.rows_out}</div></div>
-        <div><div class='text-slate-500'>Duplicates removed</div><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
-        <div><div class='text-slate-500'>Invalid emails</div><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
-        <div><div class='text-slate-500'>Invalid phones</div><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>`;
-      document.getElementById('reportColumns').textContent = (s.columns || []).join(', ');
-      const head = document.querySelector('#reportTable thead'); const body = document.querySelector('#reportTable tbody');
-      head.innerHTML = ''; body.innerHTML = '';
-      const rows = data.preview_rows || [];
-      if (rows.length) {
-        const headers = Object.keys(rows[0]);
-        const tr = document.createElement('tr');
-        headers.forEach(h => { const th = document.createElement('th'); th.className = 'text-left p-2 border-b'; th.textContent = h; tr.appendChild(th); });
-        head.appendChild(tr);
-        rows.forEach(r => {
-          const trb = document.createElement('tr');
-          headers.forEach(h => { const td = document.createElement('td'); td.className = 'p-2'; td.textContent = r[h] ?? ''; trb.appendChild(td); });
-          body.appendChild(trb);
-        });
-      }
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    };
-
-    document.getElementById('printReport').onclick = () => {
-      const rpt = document.getElementById('report');
-      if (rpt.classList.contains('hidden')) document.getElementById('openReport').click();
-      window.print();
-    };
-
-    document.getElementById('emailReport').onclick = async () => {
-      const html = buildReportHTML();
-      const to = prompt('Send report to which email address?');
-      if (!to) return;
-      const fd = new FormData(); fd.append('to_email', to); fd.append('html', html);
-      const res = await fetch('/api/email_report', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.error) alert('Email error: ' + data.error); else alert('Email sent.');
-    };
-
-    document.getElementById('sheetsExport').onclick = async () => {
-      const last = JSON.parse(localStorage.getItem('cp-last-run') || 'null');
-      if (!last) return alert('No data to export.');
-      const fd = new FormData(); fd.append('csv_text', last.csv_text);
-      const res = await fetch('/api/export_to_sheets', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!data.ok) alert('Sheets export error: ' + (data.error || 'unknown')); else alert('Exported to worksheet: ' + data.worksheet);
-    };
-  </script>
-</body>
-</html>
+</div>
+<script>
+const ctx = document.getElementById('analyticsChart'); const chart = new Chart(ctx,{type:'bar',data:{labels:[],datasets:[{label:'Invalid emails',data:[]},{label:'Invalid phones',data:[]},{label:'Duplicates removed',data:[]}]}});
+const form=document.getElementById('form'); const headersHint=document.getElementById('headersHint'); const summaryBox=document.getElementById('summary'); const preview=document.getElementById('preview'); const tHead=document.querySelector('#previewTable thead'); const tBody=document.querySelector('#previewTable tbody'); const dlCsv=document.getElementById('downloadCsv'); const dlXlsx=document.getElementById('downloadXlsx'); const openReportBtn=document.getElementById('openReport'); const printReportBtn=document.getElementById('printReport');
+form.file.addEventListener('change', async()=>{ if(!form.file.files[0])return; const text=await form.file.files[0].text(); const firstLine=text.split(/\r?\n/)[0]||''; headersHint.textContent=firstLine ? 'Detected headers: '+firstLine : ''});
+form.addEventListener('submit', async(e)=>{ e.preventDefault(); summaryBox.classList.add('hidden'); preview.classList.add('hidden'); const fd=new FormData(form); const res=await fetch('/api/process',{method:'POST',body:fd}); if(!res.ok){alert('Processing failed');return;} const data=await res.json(); const s=data.summary;
+summaryBox.innerHTML=`<div class='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
+<div><span class='text-slate-400'>Rows in</span><div class='text-xl font-semibold'>${s.rows_in}</div></div>
+<div><span class='text-slate-400'>Rows out</span><div class='text-xl font-semibold'>${s.rows_out}</div></div>
+<div><span class='text-slate-400'>Duplicates removed</span><div class='text-xl font-semibold'>${s.duplicates_removed}</div></div>
+<div><span class='text-slate-400'>Invalid emails</span><div class='text-xl font-semibold'>${s.invalid_emails}</div></div>
+<div><span class='text-slate-400'>Invalid phones</span><div class='text-xl font-semibold'>${s.invalid_phones}</div></div>
+<div><span class='text-slate-400'>Columns</span><div class='text-sm break-all'>${(s.columns||[]).join(', ')}</div></div></div>`; summaryBox.classList.remove('hidden');
+const blob=new Blob([data.csv_text],{type:'text/csv'}); const url=URL.createObjectURL(blob); dlCsv.href=url; dlCsv.classList.remove('hidden'); dlXlsx.onclick=()=>{const wb=XLSX.utils.book_new(); const ws=XLSX.utils.csv_to_sheet(data.csv_text); XLSX.utils.book_append_sheet(wb,ws,'Cleaned'); XLSX.writeFile(wb,'cleaned.xlsx');}; dlXlsx.classList.remove('hidden');
+const rows=data.preview_rows||[]; tHead.innerHTML=''; tBody.innerHTML=''; if(rows.length){ const cols=Object.keys(rows[0]); const tr=document.createElement('tr'); cols.forEach(c=>{const th=document.createElement('th'); th.className='text-left p-2 border-b border-slate-800'; th.textContent=c; tr.appendChild(th)}); tHead.appendChild(tr); rows.forEach(r=>{const trb=document.createElement('tr'); cols.forEach(c=>{const td=document.createElement('td'); td.className='p-2'; td.textContent=r[c]??''; trb.appendChild(td)}); tBody.appendChild(trb)}); preview.classList.remove('hidden'); }
+});
+</script>
+</body></html>

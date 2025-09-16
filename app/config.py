@@ -1,3 +1,4 @@
+
 import os
 
 class Settings:
@@ -7,25 +8,20 @@ class Settings:
     PRIMARY_HEX = os.getenv("BRAND_PRIMARY_HEX", "#06b6d4")
 
     SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
+    BASE_URL = os.getenv("BASE_URL", "")
 
-    BASE_URL = os.getenv("BASE_URL", "")  # e.g. https://clearpoint-dataapp.onrender.com
-
-    # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "")
 
-    # Only allow sign-in from these Google Workspace domains (comma-separated)
+    # Allowed company domains (for employee role)
     ALLOWED_GOOGLE_DOMAINS = [d.strip().lower() for d in os.getenv("ALLOWED_GOOGLE_DOMAINS", "").split(",") if d.strip()]
 
-    # Database
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./clearpoint.db")
 
-    # Email (Resend)
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM = os.getenv("RESEND_FROM", "noreply@clearpoint.example")
 
-    # Google Sheets
     GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
     GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "")
 

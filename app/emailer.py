@@ -1,3 +1,4 @@
+
 import requests
 from app.config import settings
 
@@ -9,7 +10,6 @@ def send_report_email(to_email: str, subject: str, html: str):
     headers = {"Authorization": f"Bearer {settings.RESEND_API_KEY}", "Content-Type": "application/json"}
     r = requests.post(url, json=payload, headers=headers, timeout=30)
     try:
-        data = r.json()
+        return r.json()
     except Exception:
-        data = {"status_code": r.status_code, "text": r.text}
-    return data
+        return {"status_code": r.status_code, "text": r.text}
